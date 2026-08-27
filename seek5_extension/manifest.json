@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "5초 이동 (Netflix / Disney+ / Peacock / Prime Video / Tubi / Coupang Play)",
+  "version": "2.2",
+  "description": "넷플릭스, 디즈니플러스, 피콕, 프라임 비디오, 투비, 쿠팡플레이에서 좌/우 방향키로 5초씩 뒤로/앞으로 이동합니다.",
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.netflix.com/*",
+        "*://*.disneyplus.com/*",
+        "*://*.peacocktv.com/*",
+        "*://*.primevideo.com/*",
+        "*://*.amazon.com/gp/video/*",
+        "*://*.tubitv.com/*",
+        "*://*.tubi.tv/*",
+        "*://*.coupangplay.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["*://*.netflix.com/*"],
+      "js": ["netflix_main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}
