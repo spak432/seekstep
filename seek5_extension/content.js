@@ -1,7 +1,14 @@
-// 좌/우 방향키로 5초씩 이동 (Netflix / Disney+ / Peacock / Prime Video)
+// 키보드로 영상 위치 이동 (Netflix / Disney+ / Peacock / Prime Video / Tubi / Coupang Play)
 // isolated world에서 실행 — 페이지 스크립트보다 먼저 로드되는 것이 보장되므로
 // 플레이어가 키 이벤트를 가로채기 전에 우리가 먼저 받는다.
-const SEEK_SECONDS = 5;
+//
+// 키 → 이동량(초). e.code 기준이라 한/영 입력 상태와 무관하게 동작한다.
+const KEY_OFFSETS = {
+  ArrowLeft: -5,
+  ArrowRight: 5,
+  BracketLeft: -3,   // [
+  BracketRight: 3,   // ]
+};
 
 function isTyping(target) {
   if (!target) return false;
@@ -95,7 +102,7 @@ function guardStall(video, target) {
   }, 1200);
 }
 
-// 화면에 "◀ 5초 / 5초 ▶" 잠깐 표시
+// 화면에 "◀ 5초 / 3초 ▶" 같은 이동량을 잠깐 표시
 let toastEl = null;
 let toastTimer = null;
 function showToast(offsetSec) {
@@ -124,19 +131,15 @@ const swallowedKeys = new Set();
 window.addEventListener('keydown', (e) => {
   if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
   if (isTyping(e.target)) return;
+  const offset = KEY_OFFSETS[e.code];
+  if (offset === undefined) return;
+
   // 키를 누르고 있을 때의 자동 반복은 무시 — 초당 수십 번 seek가 쌓이는 것을 막는다
   if (e.repeat) {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-    }
+    e.preventDefault();
+    e.stopImmediatePropagation();
     return;
   }
-
-  let offset = 0;
-  if (e.key === 'ArrowLeft') offset = -SEEK_SECONDS;
-  else if (e.key === 'ArrowRight') offset = SEEK_SECONDS;
-  else return;
 
   let handled;
   if (location.hostname.endsWith('netflix.com')) {
@@ -152,16 +155,16 @@ window.addEventListener('keydown', (e) => {
   if (handled) {
     e.preventDefault();
     e.stopImmediatePropagation();
-    swallowedKeys.add(e.key);
+    swallowedKeys.add(e.code);
     showToast(offset);
   }
 }, true);
 
 for (const type of ['keyup', 'keypress']) {
   window.addEventListener(type, (e) => {
-    if (!swallowedKeys.has(e.key)) return;
+    if (!swallowedKeys.has(e.code)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (type === 'keyup') swallowedKeys.delete(e.key);
+    if (type === 'keyup') swallowedKeys.delete(e.code);
   }, true);
 }
