@@ -1,4 +1,5 @@
-// 키보드로 영상 위치 이동 (Netflix / Disney+ / Peacock / Prime Video / Tubi / Coupang Play)
+// 키보드로 영상 위치 이동
+// (Netflix / Disney+ / Peacock / Prime Video / Tubi / Coupang Play / YouTube)
 // isolated world에서 실행 — 페이지 스크립트보다 먼저 로드되는 것이 보장되므로
 // 플레이어가 키 이벤트를 가로채기 전에 우리가 먼저 받는다.
 //
@@ -9,6 +10,15 @@ const KEY_OFFSETS = {
   BracketLeft: -3,   // [
   BracketRight: 3,   // ]
 };
+
+function isYouTubeHost() {
+  const host = location.hostname;
+  return host === 'youtu.be' ||
+    host === 'youtube.com' ||
+    host.endsWith('.youtube.com') ||
+    host === 'youtube-nocookie.com' ||
+    host.endsWith('.youtube-nocookie.com');
+}
 
 function isTyping(target) {
   if (!target) return false;
@@ -133,6 +143,11 @@ window.addEventListener('keydown', (e) => {
   if (isTyping(e.target)) return;
   const offset = KEY_OFFSETS[e.code];
   if (offset === undefined) return;
+
+  // YouTube는 이미 화살표로 5초 이동한다. isolated world의 stopImmediatePropagation은
+  // 페이지 핸들러를 막지 못해서, 화살표까지 처리하면 5초+5초로 이중 이동한다.
+  // YouTube에서는 [ / ] 3초만 맡는다.
+  if (isYouTubeHost() && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return;
 
   // 키를 누르고 있을 때의 자동 반복은 무시 — 초당 수십 번 seek가 쌓이는 것을 막는다
   if (e.repeat) {
