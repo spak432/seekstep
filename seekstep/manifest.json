@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "seekstep",
+  "version": "2.4",
+  "description": "Seek 5 seconds with the left and right arrow keys on Netflix, Disney+, Youtube, Peacock, Prime Video, Tubi, and Coupang Play. Seek 3 seconds with [ and ]",
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.netflix.com/*",
+        "*://*.disneyplus.com/*",
+        "*://*.peacocktv.com/*",
+        "*://*.primevideo.com/*",
+        "*://*.amazon.com/gp/video/*",
+        "*://*.tubitv.com/*",
+        "*://*.tubi.tv/*",
+        "*://*.coupangplay.com/*",
+        "*://*.youtube.com/*",
+        "*://youtube.com/*",
+        "*://youtu.be/*",
+        "*://*.youtube-nocookie.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["*://*.netflix.com/*"],
+      "js": ["netflix_main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}
