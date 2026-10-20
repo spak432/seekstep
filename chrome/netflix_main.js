@@ -1,3 +1,4 @@
+// chrome/ 와 firefox/ 의 이 파일은 같은 내용으로 유지한다.
 // 넷플릭스 전용 — 페이지 컨텍스트(MAIN world)에서 실행.
 // video.currentTime을 직접 바꾸면 넷플릭스 플레이어가 깨지므로 내부 API로 seek한다.
 window.addEventListener('message', (e) => {

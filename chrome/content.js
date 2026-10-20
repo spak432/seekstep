@@ -1,3 +1,4 @@
+// chrome/ 와 firefox/ 의 이 파일은 같은 내용으로 유지한다.
 // 키보드로 영상 위치 이동
 // (Netflix / Disney+ / Peacock / Prime Video / Tubi / Coupang Play / YouTube)
 // isolated world에서 실행 — 페이지 스크립트보다 먼저 로드되는 것이 보장되므로
