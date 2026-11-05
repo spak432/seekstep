@@ -1,15 +1,17 @@
-// chrome/ 와 firefox/ 의 이 파일은 같은 내용으로 유지한다.
-// 키보드로 영상 위치 이동
+// This file in chrome/ and firefox/ must be kept in sync.
+// Keyboard seek for video playback
 // (Netflix / Disney+ / Peacock / Prime Video / Tubi / Coupang Play / YouTube)
-// isolated world에서 실행 — 페이지 스크립트보다 먼저 로드되는 것이 보장되므로
-// 플레이어가 키 이벤트를 가로채기 전에 우리가 먼저 받는다.
+// Runs in isolated world — guaranteed to load before page scripts,
+// so we receive key events before the player can intercept them.
 //
-// 키 → 이동량(초). e.code 기준이라 한/영 입력 상태와 무관하게 동작한다.
+// Key → offset (seconds). Uses e.code so it works regardless of keyboard layout.
 const KEY_OFFSETS = {
   ArrowLeft: -5,
   ArrowRight: 5,
   BracketLeft: -3,   // [
   BracketRight: 3,   // ]
+  KeyZ: -3,          // z
+  KeyX: 3,           // x
 };
 
 function isYouTubeHost() {
@@ -27,7 +29,7 @@ function isTyping(target) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
 }
 
-// shadow DOM 안에 숨어 있는 video 엘리먼트까지 재귀적으로 수집
+// Recursively collect video elements hidden inside shadow DOM
 function collectVideos(root, out) {
   root.querySelectorAll('video').forEach(v => out.push(v));
   root.querySelectorAll('*').forEach(el => {
@@ -35,9 +37,10 @@ function collectVideos(root, out) {
   });
 }
 
-// 디즈니플러스에는 숨겨진 스텁 video가 함께 존재한다. 스텁을 건드리면
-// 재생이 멈추므로, 실제로 디코딩 중이고(readyState > 2) 소스가 있으며
-// 화면에 보이는 것만 후보로 삼고 그중 본편(가장 긴 것)을 고른다.
+// Disney+ has a hidden stub video alongside the real one. Touching the stub
+// pauses playback, so we only consider videos that are actually decoding
+// (readyState > 2), have a source, and are visible on screen — then pick
+// the main feature (longest duration).
 function findVideo() {
   const all = [];
   collectVideos(document, all);
@@ -54,9 +57,10 @@ function findVideo() {
   return pool.reduce((a, b) => (b.duration > a.duration ? b : a));
 }
 
-// 연속 입력 누적: 앞선 이동이 아직 끝나지 않았을 때만(video.seeking)
-// 그 목표 지점을 기준으로 쌓는다 (-5, -5 → -10).
-// 이동이 이미 끝났다면 그 사이 재생이 진행됐으므로 반드시 실제 위치를 기준으로 삼는다.
+// Accumulate rapid key presses: if the previous seek hasn't finished yet
+// (video.seeking), stack relative to its target (-5, -5 → -10).
+// If the seek already completed, playback has advanced, so base off the
+// actual currentTime instead.
 let pendingTarget = null;
 let pendingAt = 0;
 let watchdog = null;
@@ -78,8 +82,8 @@ function seekVideo(offsetSec) {
   return true;
 }
 
-// 플레이어가 자막을 native TextTrack으로 렌더링하는 경우, seek 후에도
-// 이전 큐가 남아 자막이 어긋날 수 있다. 트랙을 껐다 켜서 큐 목록을 다시 계산시킨다.
+// When the player renders subtitles via native TextTrack, a seek can leave
+// stale cues. Toggle the track mode to force the cue list to recalculate.
 function resyncTextTracks(video) {
   const tracks = video.textTracks;
   if (!tracks) return;
@@ -91,8 +95,8 @@ function resyncTextTracks(video) {
   }
 }
 
-// MSE 플레이어는 버퍼가 비워진 지점으로 이동하면 데이터를 다시 받아오지 못한 채
-// 멈추는 경우가 있다. 이동이 완료되지 않으면 재시도하고, 그래도 안 되면 재생을 깨운다.
+// MSE players can stall when seeking into an unbuffered region — they fail to
+// refetch segments. If the seek doesn't settle, retry once, then wake playback.
 function guardStall(video, target) {
   clearTimeout(watchdog);
   const settled = () => {
@@ -105,7 +109,7 @@ function guardStall(video, target) {
   watchdog = setTimeout(() => {
     video.removeEventListener('seeked', settled);
     if (video.readyState >= 3 && !video.seeking) return;
-    // 같은 지점으로 한 번 더 seek하면 플레이어가 세그먼트를 다시 요청한다
+    // Seeking the same spot again prompts the player to refetch segments
     video.currentTime = target + 0.01;
     setTimeout(() => {
       if (video.paused) video.play().catch(() => {});
@@ -113,7 +117,7 @@ function guardStall(video, target) {
   }, 1200);
 }
 
-// 화면에 "◀ 5초 / 3초 ▶" 같은 이동량을 잠깐 표시
+// Briefly show the seek offset on screen (e.g., "◀ 5s / 3s ▶")
 let toastEl = null;
 let toastTimer = null;
 function showToast(offsetSec) {
@@ -129,14 +133,14 @@ function showToast(offsetSec) {
     ].join(';');
     document.body.appendChild(toastEl);
   }
-  toastEl.textContent = offsetSec < 0 ? `◀ ${-offsetSec}초` : `${offsetSec}초 ▶`;
+  toastEl.textContent = offsetSec < 0 ? `◀ ${-offsetSec}s` : `${offsetSec}s ▶`;
   toastEl.style.opacity = '1';
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toastEl.style.opacity = '0'; }, 600);
 }
 
-// 우리가 처리한 키는 keyup/keypress까지 전부 차단해야 한다.
-// 플레이어가 keydown이 아닌 keyup에서 자체 스킵을 실행하면 이중으로 이동하기 때문.
+// We must block keyup/keypress too for keys we handled.
+// Some players trigger their own skip on keyup, causing double-seek.
 const swallowedKeys = new Set();
 
 window.addEventListener('keydown', (e) => {
@@ -145,12 +149,12 @@ window.addEventListener('keydown', (e) => {
   const offset = KEY_OFFSETS[e.code];
   if (offset === undefined) return;
 
-  // YouTube는 이미 화살표로 5초 이동한다. isolated world의 stopImmediatePropagation은
-  // 페이지 핸들러를 막지 못해서, 화살표까지 처리하면 5초+5초로 이중 이동한다.
-  // YouTube에서는 [ / ] 3초만 맡는다.
+  // YouTube already seeks 5s on arrow keys. stopImmediatePropagation in
+  // isolated world doesn't stop page handlers, so handling arrows would
+  // cause double-seek (5s + 5s). On YouTube we only handle [ / ] for 3s.
   if (isYouTubeHost() && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return;
 
-  // 키를 누르고 있을 때의 자동 반복은 무시 — 초당 수십 번 seek가 쌓이는 것을 막는다
+  // Ignore auto-repeat while holding a key — prevents dozens of seeks/sec
   if (e.repeat) {
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -159,15 +163,15 @@ window.addEventListener('keydown', (e) => {
 
   let handled;
   if (location.hostname.endsWith('netflix.com')) {
-    // 넷플릭스는 재생 페이지(/watch)에서만 동작. 실제 seek는
-    // 페이지 컨텍스트의 netflix_main.js가 내부 API로 수행한다.
+    // Netflix only works on watch pages (/watch). The actual seek is
+    // performed by netflix_main.js in the page context via internal APIs.
     handled = location.pathname.startsWith('/watch');
     if (handled) window.postMessage({ type: 'SEEKSTEP', offsetSec: offset }, '*');
   } else {
     handled = seekVideo(offset);
   }
 
-  // 성공했을 때만 기본 동작(자체 스킵, 페이지 탐색)을 막는다
+  // Only block default behavior (player skip, page navigation) on success
   if (handled) {
     e.preventDefault();
     e.stopImmediatePropagation();
